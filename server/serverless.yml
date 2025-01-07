@@ -78,6 +78,8 @@ provider:
             - "sqs:SendMessage"
             - lambda:GetFunction
             - "ses:SendEmail"
+            - lambda:PutFunctionConcurrency
+            - lambda:GetAccountSettings
 
           Resource: "*"
 
@@ -93,6 +95,11 @@ functions:
             - prefix: ""          # Lọc theo prefix (nếu cần)
             - suffix: ""          # Lọc theo suffix (nếu cần)
 
+  adjustConcurrency:
+    handler: eventBridge/AdjustConcurrency.handler
+    events:
+      - eventBridge:
+          schedule: 'cron(0 10 * * ? *)'  # Điều này sẽ kích hoạt mỗi 2 phút
 
 resources:
   Resources:
