@@ -1,0 +1,134 @@
+service: server
+# app and org for use with dashboard.serverless.com
+#app: your-app-name
+#org: your-org-name
+
+# You can pin your service to only deploy with a specific Serverless version
+# Check out our docs for more details
+frameworkVersion: '3'
+
+
+custom:
+    stage: ${opt:stage, 'local'}
+    serverless-offline:
+        httpPort: 4000
+        lambdaPort: 4002
+        websocketPort: 3005
+    secret: ${file(env/config.${self:custom.stage}.yaml)}
+
+layers:
+  lambdaLayer:
+    package:
+      artifact: lambda_layer/lambda_layer.zip
+
+provider:
+  name: aws
+  runtime: python3.9
+  stage: dev
+  region: us-east-1
+  layers:
+    - arn:aws:lambda:${self:custom.secret.region-name}:${self:custom.secret.aws-account-id}:layer:lambdaLayer:${self:custom.secret.lambda-layer-version}
+  # environment: ${file(env/lambda.env.yaml)}
+  iam:
+    role:
+      statements:
+        - Effect: Allow
+          Action:
+            - "dynamodb:CreateTable"
+            - "dynamodb:BatchGetItem"
+            - "dynamodb:BatchWriteItem"
+            - "dynamodb:PutItem"
+            - "dynamodb:UpdateItem"
+            - "dynamodb:DeleteItem"
+            - "dynamodb:GetItem"
+            - "dynamodb:Scan"
+            - "dynamodb:Query"
+            - "dynamodb:List*"
+            - "dynamodb:DeleteTable"
+            - "dynamodb:ListExports"
+            - "cognito-idp:List*"
+            - "cognito-idp:AdminConfirmSignUp"
+            - "cognito-idp:AdminListDevices"
+            - "cognito-idp:CreateUserPoolClient"
+            - "cognito-idp:DeleteUserPool"
+            - "cognito-idp:DeleteUserPoolClient"
+            - "cognito-idp:CreateUserPool"
+            - "cognito-idp:AdminInitiateAuth"
+            - "cognito-idp:AdminUpdateUserAttributes"
+            - "cognito-idp:AdminCreateUser"
+            - "cognito-idp:AdminDeleteUser"
+            - "cognito-idp:AdminSetUserPassword"
+            - "cognito-idp:RespondToAuthChallenge"
+            - "cognito-idp:AssociateSoftwareToken"
+            - "cognito-idp:VerifySoftwareToken"
+            - "cognito-idp:AdminSetUserMFAPreference"
+            - "s3:GetObject"
+            - "s3:PutObject"
+            - "s3:GetBucketWebsite"
+            - "s3:CreateBucket"
+            - "s3:DeleteObject"
+            - "s3:GetBucketLocation"
+            - "s3:DeleteBucket"
+            - "s3:List*"
+            - "sqs:ListQueues"
+            - "sqs:GetQueueUrl"
+            - "sqs:DeleteQueue"
+            - "sqs:GetQueueAttributes"
+            - "sqs:CreateQueue"
+            - "sqs:SendMessage"
+            - lambda:GetFunction
+            - "ses:SendEmail"
+
+          Resource: "*"
+
+functions:
+  triggerS3Event:
+    handler: rest_api/TriggerS3Event.handler
+    events:
+      - s3:
+          bucket: !Ref S3BucketTest # Thay bằng tên bucket của bạn
+          event: s3:ObjectCreated:Put
+          existing: true
+          rules:
+            - prefix: ""          # Lọc theo prefix (nếu cần)
+            - suffix: ""          # Lọc theo suffix (nếu cần)
+
+
+resources:
+  Resources:
+    PISettingTable:
+      Type: AWS::DynamoDB::Table
+      Properties:
+        TableName: PISetting${self:custom.secret.db-suffix}
+        SSESpecification:
+          SSEEnabled: true
+        BillingMode: PAY_PER_REQUEST
+        AttributeDefinitions:
+          - AttributeName: facilityID
+            AttributeType: S
+        KeySchema:
+          - AttributeName: facilityID
+            KeyType: HASH
+
+    S3BucketTest:
+      Type: "AWS::S3::Bucket"
+      Properties:
+        BucketName: s3-bucket-test-07-01-2025-thangld-01
+        PublicAccessBlockConfiguration:
+          BlockPublicAcls: true
+          BlockPublicPolicy: true
+          IgnorePublicAcls: true
+          RestrictPublicBuckets: true
+
+    S3BucketTestPolicy:
+      Type: "AWS::S3::BucketPolicy"
+      Properties:
+        Bucket: !Ref S3BucketTest
+        PolicyDocument:
+          Statement:
+            - Action: "s3:*"
+              Effect: Allow
+              Resource: !Sub "arn:aws:s3:::${S3BucketTest}/*"
+              # Principal: "*"
+              Principal:
+                AWS: ${self:custom.secret.cloud-front-oai}
